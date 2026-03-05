@@ -42,4 +42,23 @@ else
     echo "  Added to $RC_FILE"
 fi
 
+# Configure subscription tier
+CONF="$HOME/.claude-tools.conf"
+if [ ! -f "$CONF" ] || ! grep -q "^tier=" "$CONF" 2>/dev/null; then
+    echo ""
+    echo "  Select your Claude subscription tier:"
+    echo "    1) Pro         (40 prompts/5h)"
+    echo "    2) Max 5x      (200 prompts/5h)"
+    echo "    3) Max 20x     (800 prompts/5h)"
+    echo ""
+    read -rp "  Choice [1-3]: " _tier_choice
+    case "$_tier_choice" in
+        1) _tier="pro" ;;
+        3) _tier="max20x" ;;
+        *) _tier="max5x" ;;
+    esac
+    echo "tier=$_tier" > "$CONF"
+    echo "  Saved tier=$_tier to $CONF"
+fi
+
 echo "  Installed. Restart your shell or run: source $RC_FILE"

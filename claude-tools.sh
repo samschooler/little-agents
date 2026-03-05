@@ -71,11 +71,11 @@ _ct_session_status() {
 
 _ct_quota_line() {
     local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
-    local _qn=${_q[0]:-0} _qt=${_q[1]:---}
+    local _qn=${_q[0]:-0} _ql=${_q[1]:-200} _qp=${_q[2]:-0} _qt=${_q[3]:---}
     local _qc="\033[1;32m"
-    [ "$_qn" -ge 100 ] 2>/dev/null && _qc="\033[1;33m"
-    [ "$_qn" -ge 160 ] 2>/dev/null && _qc="\033[1;31m"
-    echo -e "  ${_qc}⚡${_qn} prompts/5h\033[0m \033[0;90m(resets ${_qt})\033[0m"
+    [ "$_qp" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
+    [ "$_qp" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
+    echo -e "  ${_qc}⚡${_qn}/${_ql} (${_qp}%) 5h\033[0m \033[0;90m(resets ${_qt})\033[0m"
 }
 
 cs() {

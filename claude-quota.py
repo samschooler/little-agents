@@ -4,10 +4,17 @@
 import json
 import os
 import glob
-import time
 from datetime import datetime, timezone, timedelta
 
 WINDOW = timedelta(hours=5)
+
+# 5-hour cycle prompt limits by tier
+TIER_LIMITS = {
+    "pro":    40,
+    "max5x":  200,
+    "max20x": 800,
+}
+DEFAULT_TIER = "max5x"
 
 def is_real_prompt(entry):
     """A real prompt has type=user with string content (not tool_result dicts)."""
@@ -20,7 +27,20 @@ def is_real_prompt(entry):
     # Real prompts have string content; tool results have list of dicts
     return isinstance(content, str) and len(content.strip()) > 0
 
+def get_tier():
+    conf = os.path.expanduser("~/.claude-tools.conf")
+    if os.path.exists(conf):
+        with open(conf) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("tier="):
+                    return line.split("=", 1)[1].strip().lower()
+    return DEFAULT_TIER
+
 def main():
+    tier = get_tier()
+    limit = TIER_LIMITS.get(tier, TIER_LIMITS[DEFAULT_TIER])
+
     now = datetime.now(timezone.utc)
     cutoff = now - WINDOW
     cutoff_ts = cutoff.isoformat()
@@ -72,7 +92,8 @@ def main():
     else:
         reset_str = "5h00m"
 
-    print(f"{count} {reset_str}")
+    pct = int(count * 100 / limit) if limit > 0 else 0
+    print(f"{count} {limit} {pct} {reset_str}")
 
 if __name__ == "__main__":
     main()
