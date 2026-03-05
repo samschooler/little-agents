@@ -28,13 +28,34 @@ def is_real_prompt(entry):
     return isinstance(content, str) and len(content.strip()) > 0
 
 def get_tier():
+    # Auto-detect from Claude credentials
+    creds = os.path.expanduser("~/.claude/.credentials.json")
+    if os.path.exists(creds):
+        try:
+            with open(creds) as f:
+                data = json.load(f)
+            oauth = data.get("claudeAiOauth", {})
+            rate_tier = oauth.get("rateLimitTier", "")
+            if "20x" in rate_tier:
+                return "max20x"
+            elif "5x" in rate_tier:
+                return "max5x"
+            sub_type = oauth.get("subscriptionType", "")
+            if sub_type == "pro":
+                return "pro"
+        except (json.JSONDecodeError, IOError):
+            pass
+    # Fall back to manual config
     conf = os.path.expanduser("~/.claude-tools.conf")
     if os.path.exists(conf):
-        with open(conf) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("tier="):
-                    return line.split("=", 1)[1].strip().lower()
+        try:
+            with open(conf) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("tier="):
+                        return line.split("=", 1)[1].strip().lower()
+        except IOError:
+            pass
     return DEFAULT_TIER
 
 def main():
