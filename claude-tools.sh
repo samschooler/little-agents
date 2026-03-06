@@ -93,7 +93,8 @@ cst() {
     local _keys="qwertyuiopasdfghjlzxcvbnm"
     while true; do
         clear
-        _ct_quota_line
+        local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
+        local _tot=${_q[0]:-0} _in=${_q[1]:-0} _out=${_q[2]:-0} _cache=${_q[3]:-0} _rst=${_q[4]:---}
         local _sessions=()
         while IFS=' ' read -r _s _p _c _cwd; do
             _sessions+=("$_s")
@@ -107,8 +108,9 @@ cst() {
         if [ ${#_sessions[@]} -eq 0 ]; then
             echo "  No active tmux sessions"
         fi
-        local _max=${_keys:$((${#_sessions[@]}-1)):1}
         echo ""
+        echo -e "  \033[1;36m⚡${_tot}\033[0m \033[0;90min:${_in} out:${_out} cache:${_cache} | resets ${_rst}\033[0m"
+        local _max=${_keys:$((${#_sessions[@]}-1)):1}
         echo -ne "  \033[0;90m[${_keys:0:1}-${_max}] attach  [k] kill  [n] new  [esc] quit\033[0m "
         read -rsn1 -t 0.5 _n || continue
         if [[ "$_n" = $'\e' ]]; then
