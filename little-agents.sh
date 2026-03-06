@@ -56,8 +56,8 @@ nt() {
     fi
 }
 
-kt() { tmux kill-session -t "${1:?session name required}"; }
-at() { tmux a -t "${1:?session name required}"; }
+kt() { rm -f "/tmp/claude-unread-${1:?session name required}"; tmux kill-session -t "$1"; }
+at() { rm -f "/tmp/claude-unread-${1:?session name required}"; tmux a -t "$1"; }
 
 _ct_session_status() {
     local _session=$1
@@ -84,10 +84,13 @@ cs() {
     local _has=false
     while IFS=' ' read -r _s _p _c _cwd; do
         if ! $_has; then echo "  Sessions:"; _has=true; fi
-        local _st=""
-        [ "$_c" = "claude" ] && _st=" $(_ct_session_status "$_s")"
+        local _st="" _dot=""
+        if [ "$_c" = "claude" ]; then
+            _st=" $(_ct_session_status "$_s")"
+            [ -f "/tmp/claude-unread-${_s}" ] && _dot=" \033[1;31m●\033[0m"
+        fi
         local _dir="${_cwd#$HOME/repo/}"
-        echo -e "    $_s \033[0;90m[$_dir]\033[0m$_st"
+        echo -e "   ${_dot} $_s \033[0;90m[$_dir]\033[0m$_st"
     done < <(tmux list-panes -a -F '#{session_name} #{pane_pid} #{pane_current_command} #{pane_current_path}' 2>/dev/null | sort -u -k1,1)
     if ! $_has; then echo "  No active tmux sessions"; fi
 }
@@ -95,6 +98,7 @@ cs() {
 cst() {
     local _keys="qwertyuiopasdfghjlzxcvbnm"
     local _first=true
+    declare -A _prev_statuses
     tput civis 2>/dev/null  # hide cursor
     trap 'tput cnorm 2>/dev/null; trap - RETURN' RETURN
     while true; do
@@ -111,9 +115,22 @@ cst() {
             local _i=${#_sessions[@]}
             local _k=${_keys:$((_i-1)):1}
             local _st=""
-            [ "$_c" = "claude" ] && _st=" $(_ct_session_status "$_s")"
+            local _dot=""
+            if [ "$_c" = "claude" ]; then
+                local _cur_status=$(cat "/tmp/claude-status-${_s}" 2>/dev/null)
+                local _prev=${_prev_statuses[$_s]:-}
+                # Mark unread on transition to waiting, only if no one is attached
+                if [[ -n "$_prev" && "$_prev" != "waiting" && "$_prev" != "" && ( "$_cur_status" = "waiting" || -z "$_cur_status" ) ]]; then
+                    if ! tmux list-clients -t "$_s" 2>/dev/null | grep -q .; then
+                        touch "/tmp/claude-unread-${_s}"
+                    fi
+                fi
+                _prev_statuses[$_s]="$_cur_status"
+                [ -f "/tmp/claude-unread-${_s}" ] && _dot=" \033[1;31m●\033[0m"
+                _st=" $(_ct_session_status "$_s")"
+            fi
             local _dir="${_cwd#$HOME/repo/}"
-            _buf+="    \033[1;37m${_k})\033[0m $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
+            _buf+="    \033[1;37m${_k})\033[0m${_dot} $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
             _lines=$((_lines+1))
         done < <(tmux list-panes -a -F '#{session_name} #{pane_pid} #{pane_current_command} #{pane_current_path}' 2>/dev/null | sort -u -k1,1)
         if [ ${#_sessions[@]} -eq 0 ]; then
@@ -145,6 +162,7 @@ cst() {
             fi
             local _kidx="${_keys%%"$_kn"*}"
             if [ ${#_kidx} -lt ${#_sessions[@]} ]; then
+                rm -f "/tmp/claude-unread-${_sessions[${#_kidx}]}"
                 tmux kill-session -t "${_sessions[${#_kidx}]}"
             fi
         elif [[ "$_n" =~ ^[nN]$ ]]; then
@@ -160,6 +178,7 @@ cst() {
         else
             local _idx="${_keys%%"$_n"*}"
             if [ ${#_idx} -lt ${#_sessions[@]} ]; then
+                rm -f "/tmp/claude-unread-${_sessions[${#_idx}]}"
                 tmux a -t "${_sessions[${#_idx}]}"
             fi
         fi
