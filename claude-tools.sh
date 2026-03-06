@@ -70,12 +70,10 @@ _ct_session_status() {
 }
 
 _ct_quota_line() {
+    # Output: total_tokens input output cache_read reset_time
     local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
-    local _qn=${_q[0]:-0} _ql=${_q[1]:-200} _qp=${_q[2]:-0} _qt=${_q[3]:---}
-    local _qc="\033[1;32m"
-    [ "$_qp" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
-    [ "$_qp" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
-    echo -e "  ${_qc}⚡${_qn}/${_ql} (${_qp}%) 5h\033[0m \033[0;90m(resets ${_qt})\033[0m"
+    local _tot=${_q[0]:-0} _in=${_q[1]:-0} _out=${_q[2]:-0} _cache=${_q[3]:-0} _rst=${_q[4]:---}
+    echo -e "  \033[1;36m⚡${_tot} tokens\033[0m \033[0;90m(in:${_in} out:${_out} cache:${_cache}) resets ${_rst}\033[0m"
 }
 
 cs() {
