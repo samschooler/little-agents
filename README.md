@@ -42,7 +42,7 @@ cd little-agents
 ./install.sh
 ```
 
-Adds one `source` line to `.bashrc` (Linux) or `.zshrc` (macOS).
+Adds one `source` line to `.bashrc` (Linux) or `.zshrc` (macOS). Your subscription tier is auto-detected from `~/.claude/.credentials.json`.
 
 ## Uninstall
 

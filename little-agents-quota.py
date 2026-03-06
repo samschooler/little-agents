@@ -46,16 +46,6 @@ def get_tier():
                 return "pro"
         except (json.JSONDecodeError, IOError):
             pass
-    conf = os.path.expanduser("~/.claude-tools.conf")
-    if os.path.exists(conf):
-        try:
-            with open(conf) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("tier="):
-                        return line.split("=", 1)[1].strip().lower()
-        except IOError:
-            pass
     return "max5x"
 
 

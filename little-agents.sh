@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# claude-tools: tmux session manager + quota tracker for Claude Code
+# little-agents: tmux session manager + quota tracker for Claude Code
 # Source this file from your .bashrc or .zshrc
 
-CLAUDE_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
+LITTLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
 
 alias cld='claude --dangerously-skip-permissions'
 
@@ -71,7 +71,7 @@ _ct_session_status() {
 
 _ct_quota_line() {
     # Output: total_formatted pct reset_time
-    local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
+    local _q=($(python3 "$LITTLE_AGENTS_DIR/little-agents-quota.py" 2>/dev/null))
     local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
     local _qc="\033[1;32m"
     [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
@@ -94,14 +94,18 @@ cs() {
 
 cst() {
     local _keys="qwertyuiopasdfghjlzxcvbnm"
+    local _first=true
+    tput civis 2>/dev/null  # hide cursor
+    trap 'tput cnorm 2>/dev/null; trap - RETURN' RETURN
     while true; do
-        clear
-        local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
+        # Build frame into buffer, then write at once
+        local _buf=""
+        local _q=($(python3 "$LITTLE_AGENTS_DIR/little-agents-quota.py" 2>/dev/null))
         local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
         local _qc="\033[1;32m"
         [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
         [ "$_pct" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
-        local _sessions=()
+        local _sessions=() _lines=0
         while IFS=' ' read -r _s _p _c _cwd; do
             _sessions+=("$_s")
             local _i=${#_sessions[@]}
@@ -109,15 +113,26 @@ cst() {
             local _st=""
             [ "$_c" = "claude" ] && _st=" $(_ct_session_status "$_s")"
             local _dir="${_cwd#$HOME/repo/}"
-            echo -e "    \033[1;37m${_k})\033[0m $_s \033[0;90m[$_dir]\033[0m$_st"
+            _buf+="    \033[1;37m${_k})\033[0m $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
+            _lines=$((_lines+1))
         done < <(tmux list-panes -a -F '#{session_name} #{pane_pid} #{pane_current_command} #{pane_current_path}' 2>/dev/null | sort -u -k1,1)
         if [ ${#_sessions[@]} -eq 0 ]; then
-            echo "  No active tmux sessions"
+            _buf+="  No active tmux sessions\033[K\n"
+            _lines=$((_lines+1))
         fi
-        echo ""
-        echo -e "  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m"
+        _buf+="\033[K\n"
+        _buf+="  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m\033[K\n"
         local _max=${_keys:$((${#_sessions[@]}-1)):1}
-        echo -ne "  \033[0;90m[${_keys:0:1}-${_max}] attach  [k] kill  [n] new  [esc] quit\033[0m "
+        _buf+="  \033[0;90m[${_keys:0:1}-${_max}] attach  [k] kill  [n] new  [esc] quit\033[0m\033[K"
+        # Clear on first draw, then reposition cursor
+        if $_first; then
+            clear
+            _first=false
+        else
+            printf '\033[H'  # cursor to top-left
+        fi
+        printf '%b' "$_buf"
+        printf '\033[J'  # clear any leftover lines below
         read -rsn1 -t 0.5 _n || continue
         if [[ "$_n" = $'\e' ]]; then
             return
