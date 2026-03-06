@@ -70,10 +70,13 @@ _ct_session_status() {
 }
 
 _ct_quota_line() {
-    # Output: total_tokens input output cache_read reset_time
+    # Output: total_formatted pct reset_time
     local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
-    local _tot=${_q[0]:-0} _in=${_q[1]:-0} _out=${_q[2]:-0} _cache=${_q[3]:-0} _rst=${_q[4]:---}
-    echo -e "  \033[1;36m⚡${_tot} tokens\033[0m \033[0;90m(in:${_in} out:${_out} cache:${_cache}) resets ${_rst}\033[0m"
+    local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
+    local _qc="\033[1;32m"
+    [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
+    [ "$_pct" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
+    echo -e "  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m"
 }
 
 cs() {
@@ -94,7 +97,10 @@ cst() {
     while true; do
         clear
         local _q=($(python3 "$CLAUDE_TOOLS_DIR/claude-quota.py" 2>/dev/null))
-        local _tot=${_q[0]:-0} _in=${_q[1]:-0} _out=${_q[2]:-0} _cache=${_q[3]:-0} _rst=${_q[4]:---}
+        local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
+        local _qc="\033[1;32m"
+        [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
+        [ "$_pct" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
         local _sessions=()
         while IFS=' ' read -r _s _p _c _cwd; do
             _sessions+=("$_s")
@@ -109,7 +115,7 @@ cst() {
             echo "  No active tmux sessions"
         fi
         echo ""
-        echo -e "  \033[1;36m⚡${_tot}\033[0m \033[0;90min:${_in} out:${_out} cache:${_cache} | resets ${_rst}\033[0m"
+        echo -e "  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m"
         local _max=${_keys:$((${#_sessions[@]}-1)):1}
         echo -ne "  \033[0;90m[${_keys:0:1}-${_max}] attach  [k] kill  [n] new  [esc] quit\033[0m "
         read -rsn1 -t 0.5 _n || continue

@@ -3,7 +3,7 @@
 
 Reads assistant message usage data from ~/.claude/projects/**/*.jsonl,
 groups into 5h blocks (matching Claude's billing windows), and reports
-token totals for the active block.
+token totals for the active block with percentage against peak usage.
 
 Based on how ryoppippi/ccusage calculates session blocks.
 """
@@ -15,50 +15,17 @@ from datetime import datetime, timezone, timedelta
 
 WINDOW_HOURS = 5
 WINDOW = timedelta(hours=WINDOW_HOURS)
+PEAK_FILE = os.path.expanduser("~/.claude-tools-peak")
 
 
 def floor_to_hour(dt):
-    """Floor a datetime to the start of its hour (UTC)."""
     return dt.replace(minute=0, second=0, microsecond=0)
-
-
-def get_tier():
-    """Auto-detect subscription tier from Claude credentials."""
-    creds = os.path.expanduser("~/.claude/.credentials.json")
-    if os.path.exists(creds):
-        try:
-            with open(creds) as f:
-                data = json.load(f)
-            oauth = data.get("claudeAiOauth", {})
-            rate_tier = oauth.get("rateLimitTier", "")
-            if "20x" in rate_tier:
-                return "max20x"
-            elif "5x" in rate_tier:
-                return "max5x"
-            sub_type = oauth.get("subscriptionType", "")
-            if sub_type == "pro":
-                return "pro"
-        except (json.JSONDecodeError, IOError):
-            pass
-    # Fall back to manual config
-    conf = os.path.expanduser("~/.claude-tools.conf")
-    if os.path.exists(conf):
-        try:
-            with open(conf) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("tier="):
-                        return line.split("=", 1)[1].strip().lower()
-        except IOError:
-            pass
-    return "max5x"
 
 
 def load_entries():
     """Load all assistant usage entries from recent JSONL files."""
     now = datetime.now(timezone.utc)
-    # Look back further than 5h to find block boundaries
-    cutoff = now - timedelta(hours=WINDOW_HOURS * 2)
+    cutoff = now - timedelta(days=7)  # Look back a week for peak calculation
     cutoff_ts = cutoff.isoformat()
     entries = []
     projects_dir = os.path.expanduser("~/.claude/projects")
@@ -95,14 +62,7 @@ def load_entries():
                     total = inp + out + cache_create + cache_read
                     if total == 0:
                         continue
-                    entries.append({
-                        "timestamp": ts,
-                        "input": inp,
-                        "output": out,
-                        "cache_create": cache_create,
-                        "cache_read": cache_read,
-                        "total": total,
-                    })
+                    entries.append({"timestamp": ts, "total": total})
         except (IOError, OSError):
             continue
 
@@ -110,20 +70,15 @@ def load_entries():
     return entries
 
 
-def find_active_block(entries):
-    """Find the active 5h block using ccusage's algorithm.
-
-    Blocks start at the floor-hour of the first entry. A new block
-    starts when either:
-    - Time since block start exceeds 5h, or
-    - Time since last entry exceeds 5h (gap detection)
-    """
+def find_blocks(entries):
+    """Find all 5h blocks. Returns (completed_blocks, active_block)."""
     if not entries:
-        return None
+        return [], None
 
     now = datetime.now(timezone.utc)
     window_ms = WINDOW_HOURS * 3600
 
+    blocks = []
     block_start = None
     block_entries = []
 
@@ -146,60 +101,83 @@ def find_active_block(entries):
             since_last = epoch - last_ts
 
             if since_start > window_ms or since_last > window_ms:
-                # Start new block
+                blocks.append({"start": block_start, "end": block_start + window_ms, "entries": block_entries})
                 block_start = floor_to_hour(ts).timestamp()
                 block_entries = [entry]
             else:
                 block_entries.append(entry)
 
-    if block_start is None:
-        return None
-
-    block_end = block_start + window_ms
-    now_epoch = now.timestamp()
-
-    # Check if block is active
-    if block_entries:
+    # Last block
+    if block_start is not None and block_entries:
+        block_end = block_start + window_ms
+        now_epoch = now.timestamp()
         last_entry_ts = datetime.fromisoformat(
             block_entries[-1]["timestamp"].replace("Z", "+00:00")
         ).timestamp()
         is_active = (now_epoch - last_entry_ts < window_ms) and (now_epoch < block_end)
-    else:
-        is_active = False
 
-    if not is_active:
-        return None
+        blk = {"start": block_start, "end": block_end, "entries": block_entries}
+        if is_active:
+            return blocks, blk
+        else:
+            blocks.append(blk)
 
-    return {
-        "start": block_start,
-        "end": block_end,
-        "entries": block_entries,
-    }
+    return blocks, None
+
+
+def get_peak(completed_blocks):
+    """Get peak token usage from completed blocks, persisted to disk."""
+    # Calculate peak from completed blocks
+    current_peak = 0
+    for blk in completed_blocks:
+        total = sum(e["total"] for e in blk["entries"])
+        if total > current_peak:
+            current_peak = total
+
+    # Load saved peak
+    saved_peak = 0
+    if os.path.exists(PEAK_FILE):
+        try:
+            with open(PEAK_FILE) as f:
+                saved_peak = int(f.read().strip())
+        except (ValueError, IOError):
+            pass
+
+    peak = max(current_peak, saved_peak)
+
+    # Save if new peak
+    if peak > saved_peak:
+        try:
+            with open(PEAK_FILE, "w") as f:
+                f.write(str(peak))
+        except IOError:
+            pass
+
+    return peak
+
+
+def fmt(n):
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    elif n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)
 
 
 def main():
-    tier = get_tier()
     entries = load_entries()
-    block = find_active_block(entries)
+    completed, active = find_blocks(entries)
+    peak = get_peak(completed)
 
     now = datetime.now(timezone.utc)
 
-    if block is None:
-        print("0 0 0 5h00m")
+    if active is None:
+        print("0 0 5h00m")
         return
 
-    # Sum tokens in active block
-    total_tokens = sum(e["total"] for e in block["entries"])
-    input_tokens = sum(e["input"] for e in block["entries"])
-    output_tokens = sum(e["output"] for e in block["entries"])
-    cache_create = sum(e["cache_create"] for e in block["entries"])
-    cache_read = sum(e["cache_read"] for e in block["entries"])
+    total_tokens = sum(e["total"] for e in active["entries"])
 
-    # Use the max tokens from this block as reference since Anthropic
-    # doesn't publish exact token limits per tier. ccusage uses previous
-    # block max or a user-set limit. We'll report raw tokens and let the
-    # shell format it.
-    remaining_secs = block["end"] - now.timestamp()
+    remaining_secs = active["end"] - now.timestamp()
     if remaining_secs <= 0:
         reset_str = "now"
     else:
@@ -207,16 +185,10 @@ def main():
         mins = int((remaining_secs % 3600) // 60)
         reset_str = f"{hrs}h{mins:02d}m"
 
-    # Format token count for readability
-    def fmt(n):
-        if n >= 1_000_000:
-            return f"{n / 1_000_000:.1f}M"
-        elif n >= 1_000:
-            return f"{n / 1_000:.0f}K"
-        return str(n)
+    pct = int(total_tokens * 100 / peak) if peak > 0 else 0
 
-    # Output: total_tokens input output cache_create cache_read reset_time
-    print(f"{fmt(total_tokens)} {fmt(input_tokens)} {fmt(output_tokens)} {fmt(cache_read)} {reset_str}")
+    # Output: total_formatted pct reset_time
+    print(f"{fmt(total_tokens)} {pct} {reset_str}")
 
 
 if __name__ == "__main__":
