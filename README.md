@@ -3,29 +3,34 @@
 Lightweight tmux session manager and quota tracker for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
 ```
-  ⚡42 prompts/5h (resets 3h15m)
-  Sessions:
-    api [api] ◉ waiting
-    web [web] 💭 thinking
+    q) hyper [hyper] ◉ waiting
+    w) api   [api]   💭 thinking
+
+  ⚡7.0M (5%) resets 4h46m
+  [q-w] attach  [k] kill  [n] new  [esc] quit
 ```
 
-## What it does
+## Commands
 
-- **`cs`** — show all Claude Code tmux sessions with live status + 5-hour quota usage
-- **`cst`** — interactive session manager (attach, kill, create — refreshes live)
-- **`nt <name>`** — create a new tmux session with repo picker
-- **`kt <name>`** — kill a tmux session
-- **`at <name>`** — attach to a tmux session
+- **`cs`** — session status + quota usage
+- **`cst`** — live interactive session manager (attach, kill, create)
+- **`nt <name>`** — new tmux session with repo picker
+- **`kt <name>`** / **`at <name>`** — kill / attach session
 - **`cld`** — alias for `claude --dangerously-skip-permissions`
 
 ## Quota tracking
 
-The quota line shows your real prompt count in the rolling 5-hour window by scanning `~/.claude/projects/` conversation files. It filters out tool results and system messages to count only actual human prompts.
+Tracks real token usage (input, output, cache) from assistant messages in `~/.claude/projects/**/*.jsonl`, grouped into 5-hour billing blocks matching Claude's billing windows. Based on how [ccusage](https://github.com/ryoppippi/ccusage) calculates session blocks.
 
-Color changes as you approach limits:
-- 🟢 Green: < 100 prompts
-- 🟡 Yellow: 100–159 prompts
-- 🔴 Red: 160+ prompts
+Auto-detects your subscription tier from `~/.claude/.credentials.json`:
+
+| Tier | ~Token limit / 5h |
+|------|-------------------|
+| Pro | 45M |
+| Max 5x | 120M |
+| Max 20x | 480M |
+
+Color coding: green < 50%, yellow 50–79%, red 80%+.
 
 ## Install
 
@@ -37,7 +42,7 @@ cd little-agents
 ./install.sh
 ```
 
-This adds one `source` line to your `.bashrc` (Linux) or `.zshrc` (macOS). That's it.
+Adds one `source` line to `.bashrc` (Linux) or `.zshrc` (macOS).
 
 ## Uninstall
 
