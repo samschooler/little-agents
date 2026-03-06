@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Little Agents — tmux session manager for Claude Code</title>
+<meta name="description" content="Lightweight tmux session manager and quota tracker for Claude Code. Manage sessions, track token usage, and stay in flow.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0b;
+  --bg-raised: #111113;
+  --bg-surface: #18181b;
+  --border: #27272a;
+  --border-bright: #3f3f46;
+  --text: #e4e4e7;
+  --text-dim: #71717a;
+  --text-muted: #52525b;
+  --green: #22c55e;
+  --green-bright: #4ade80;
+  --green-glow: #22c55e40;
+  --amber: #f59e0b;
+  --amber-glow: #f59e0b30;
+  --cyan: #06b6d4;
+  --red: #ef4444;
+  --purple: #a78bfa;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+  --serif: 'Instrument Serif', serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow-x: hidden;
+  position: relative;
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Noise texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9998;
+}
+
+a { color: var(--green); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 24px;
+  background: rgba(10,10,11,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-logo .prompt {
+  color: var(--green);
+}
+
+.nav-links {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.nav-links a {
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-github {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.nav-github:hover {
+  color: var(--text);
+  border-color: var(--border-bright);
+  text-decoration: none;
+  background: var(--bg-raised);
+}
+
+/* ─── HERO ─── */
+.hero {
+  padding: 180px 0 100px;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(800px, 100vw);
+  height: 600px;
+  background: radial-gradient(ellipse, var(--green-glow), transparent 70%);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 100px;
+  padding: 5px 14px 5px 10px;
+  margin-bottom: 32px;
+  background: rgba(34,197,94,0.05);
+  opacity: 0;
+  animation: fadeUp 0.6s ease forwards;
+}
+
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.hero h1 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(56px, 8vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 24px;
+  opacity: 0;
+  animation: fadeUp 0.6s ease 0.1s forwards;
+}
+
+.hero h1 span {
+  color: var(--green);
+}
+
+.hero-sub {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--text-dim);
+  max-width: 520px;
+  opacity: 0;
+  animation: fadeUp 0.6s ease 0.2s forwards;
+}
+
+.hero-actions {
+  margin-top: 40px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  opacity: 0;
+  animation: fadeUp 0.6s ease 0.3s forwards;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--green);
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--green-bright);
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--green-glow);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg-surface);
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--border-bright);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+/* ─── TERMINAL DEMO ─── */
+.demo-section {
+  padding: 40px 0 120px;
+}
+
+.terminal {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.03),
+    0 20px 60px rgba(0,0,0,0.5),
+    0 0 100px var(--green-glow);
+  opacity: 0;
+  animation: fadeUp 0.8s ease 0.4s forwards;
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.terminal-dots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-dots span:nth-child(1) { background: #ef4444; }
+.terminal-dots span:nth-child(2) { background: #f59e0b; }
+.terminal-dots span:nth-child(3) { background: #22c55e; }
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.terminal-body {
+  padding: 24px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  min-height: 280px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.terminal-body .line {
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+  opacity: 0;
+  animation: termLine 0.3s ease forwards;
+}
+
+.terminal-body .line.dim { color: var(--text-muted); }
+.terminal-body .line .g { color: var(--green); }
+.terminal-body .line .y { color: var(--amber); }
+.terminal-body .line .c { color: var(--cyan); }
+.terminal-body .line .r { color: var(--red); }
+.terminal-body .line .w { color: #fff; font-weight: 600; }
+.terminal-body .line .d { color: var(--text-muted); }
+.terminal-body .line .p { color: var(--purple); }
+
+/* ─── FEATURES ─── */
+.features {
+  padding: 100px 0;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--green);
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 52px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 60px;
+  color: var(--text);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.feature-card {
+  background: var(--bg-raised);
+  padding: 36px 32px;
+  transition: background 0.3s;
+}
+
+.feature-card:hover {
+  background: var(--bg-surface);
+}
+
+.feature-icon {
+  font-size: 28px;
+  margin-bottom: 20px;
+  display: block;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.15);
+}
+
+.feature-card:nth-child(2) .feature-icon {
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.15);
+}
+
+.feature-card:nth-child(3) .feature-icon {
+  background: rgba(6,182,212,0.08);
+  border-color: rgba(6,182,212,0.15);
+}
+
+.feature-card h3 {
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+.feature-card p {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--text-dim);
+}
+
+/* ─── QUOTA SECTION ─── */
+.quota-section {
+  padding: 80px 0 120px;
+}
+
+.quota-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+
+.quota-visual {
+  position: relative;
+}
+
+.quota-meter {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+}
+
+.quota-tier {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.quota-tier-name {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.quota-tier-value {
+  font-size: 13px;
+  color: var(--amber);
+}
+
+.quota-bar-track {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 2s ease;
+  width: 0;
+}
+
+.quota-bar-fill.green { background: linear-gradient(90deg, var(--green), var(--green-bright)); }
+.quota-bar-fill.amber { background: linear-gradient(90deg, var(--amber), #fbbf24); }
+.quota-bar-fill.red { background: linear-gradient(90deg, var(--red), #f87171); }
+
+.quota-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.quota-tiers-list {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tier-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+.tier-row .tier-name { color: var(--text-dim); }
+.tier-row .tier-limit { color: var(--text); font-weight: 500; }
+
+.quota-info h3 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 36px;
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+
+.quota-info p {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.quota-colors {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.quota-color-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.quota-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ─── COMMANDS ─── */
+.commands {
+  padding: 80px 0 120px;
+}
+
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.cmd-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.cmd-item:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-surface);
+}
+
+.cmd-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--green);
+  white-space: nowrap;
+  min-width: 44px;
+}
+
+.cmd-desc {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ─── QUICKSTART ─── */
+.quickstart {
+  padding: 80px 0 140px;
+}
+
+.qs-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: start;
+}
+
+.qs-info h2 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 44px;
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+
+.qs-info p {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+.qs-reqs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.qs-req {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+}
+
+.qs-terminal {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.qs-terminal .terminal-bar {
+  padding: 12px 16px;
+}
+
+.qs-steps {
+  padding: 0;
+}
+
+.qs-step {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.qs-step:last-child { border-bottom: none; }
+
+.step-num {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.step-cmd {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-cmd .prompt {
+  color: var(--green);
+  margin-right: 8px;
+}
+
+.step-copy {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.step-copy:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+}
+
+.step-copy.copied {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* ─── INSTALL DETAILS ─── */
+.qs-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.qs-details summary {
+  padding: 14px 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s;
+}
+
+.qs-details summary::-webkit-details-marker { display: none; }
+
+.qs-details summary::before {
+  content: '>';
+  color: var(--green);
+  font-weight: 600;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.qs-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.qs-details summary:hover {
+  color: var(--text-dim);
+}
+
+.qs-details-body {
+  padding: 0 24px 20px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.qs-details-body ol {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
+.qs-details-body li {
+  margin-bottom: 6px;
+}
+
+.qs-details-body code {
+  color: var(--text);
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.qs-details-body p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ─── FOOTER ─── */
+footer {
+  padding: 40px 0;
+  border-top: 1px solid var(--border);
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.footer-links {
+  display: flex;
+  gap: 24px;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.footer-links a:hover { color: var(--text); }
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes termLine {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--green);
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .feature-grid { grid-template-columns: 1fr; }
+  .quota-layout { grid-template-columns: 1fr; gap: 40px; }
+  .cmd-grid { grid-template-columns: 1fr; }
+  .qs-layout { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+  .hero { padding: 140px 0 60px; }
+  .hero h1 { font-size: 48px; }
+  .hero-sub { font-size: 13px; }
+  .terminal-body { padding: 16px; font-size: 12px; overflow-x: auto; }
+  .terminal-title { font-size: 11px; }
+  .qs-step { padding: 12px 16px; gap: 10px; }
+  .step-cmd { font-size: 11px; }
+  .cmd-desc code { word-break: break-all; }
+  .section-title { margin-bottom: 36px; }
+  .features { padding: 60px 0; }
+  .commands { padding: 60px 0 80px; }
+  .quota-section { padding: 40px 0 80px; }
+  .quickstart { padding: 60px 0 100px; }
+  .demo-section { padding: 20px 0 80px; }
+  .quota-info h3 { font-size: 28px; }
+  .qs-info h2 { font-size: 32px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <span class="prompt">~</span> little agents
+  </div>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#quickstart">Install</a></li>
+  </ul>
+  <a href="https://github.com/samschooler/little-agents" target="_blank" rel="noopener" class="nav-github">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      v1.0 — open source
+    </div>
+    <h1>Little<br><span>Agents</span></h1>
+    <p class="hero-sub">
+      A lightweight tmux session manager and quota tracker
+      for Claude Code. Manage multiple agents, track token
+      usage, and stay in the flow.
+    </p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn-primary">
+        Get started
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="https://github.com/samschooler/little-agents" target="_blank" rel="noopener" class="btn-secondary">
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- TERMINAL DEMO -->
+<section class="demo-section">
+  <div class="container">
+    <div class="terminal" id="demo-terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="terminal-title">cst — little agents session manager</div>
+        <div></div>
+      </div>
+      <div class="terminal-body" id="terminal-output">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything you need,<br>nothing you don't.</h2>
+    </div>
+    <div class="feature-grid reveal">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="M2 9h20"/><circle cx="6" cy="6" r="1" fill="#22c55e"/><circle cx="9.5" cy="6" r="1" fill="#22c55e"/></svg>
+        </div>
+        <h3>Session Management</h3>
+        <p>Create, attach, kill, and switch between tmux sessions with single-key shortcuts. Each session runs its own Claude agent in a dedicated workspace.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Quota Tracking</h3>
+        <p>Real-time token usage across Claude's 5-hour billing windows. Color-coded from green to red so you always know where you stand. Auto-detects your tier.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="1.5"><path d="M4 17l6-6 4 4 6-8"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
+        </div>
+        <h3>Interactive TUI</h3>
+        <p>A live-updating terminal UI that shows all sessions with their status, working directory, and quota — with keyboard-driven navigation. Agents that finish while you're away get an unread <span style="color:var(--red)">●</span> dot that clears when you attach.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTA -->
+<section class="quota-section">
+  <div class="container">
+    <div class="quota-layout reveal">
+      <div class="quota-visual">
+        <div class="quota-meter">
+          <div class="quota-tier">
+            <span class="quota-tier-name">Max 5x</span>
+            <span class="quota-tier-value" id="quota-value">0.0M / 120M</span>
+          </div>
+          <div class="quota-bar-track">
+            <div class="quota-bar-fill green" id="quota-bar" style="width:0%"></div>
+          </div>
+          <div class="quota-stats">
+            <span id="quota-pct">0%</span>
+            <span id="quota-reset">resets 4h46m</span>
+          </div>
+          <div class="quota-tiers-list">
+            <div class="tier-row">
+              <span class="tier-name">Pro</span>
+              <span class="tier-limit">~45M tokens / 5h</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name">Max 5x</span>
+              <span class="tier-limit">~120M tokens / 5h</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name">Max 20x</span>
+              <span class="tier-limit">~480M tokens / 5h</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="quota-info">
+        <div class="section-label">Quota Tracking</div>
+        <h3>Never hit the wall<br>by surprise.</h3>
+        <p>
+          Reads real token usage from Claude's session logs — input,
+          output, and cache tokens — grouped into 5-hour billing blocks
+          that match Claude's actual billing windows.
+        </p>
+        <p>
+          Automatically detects your subscription tier from your
+          credentials. No config needed.
+        </p>
+        <div class="quota-colors">
+          <div class="quota-color-item">
+            <div class="quota-color-dot" style="background:var(--green)"></div>
+            &lt; 50%
+          </div>
+          <div class="quota-color-item">
+            <div class="quota-color-dot" style="background:var(--amber)"></div>
+            50–79%
+          </div>
+          <div class="quota-color-item">
+            <div class="quota-color-dot" style="background:var(--red)"></div>
+            80%+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<section class="commands" id="commands">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Commands</div>
+      <h2 class="section-title">Six commands.<br>That's it.</h2>
+    </div>
+    <div class="cmd-grid reveal">
+      <div class="cmd-item">
+        <span class="cmd-name">cs</span>
+        <span class="cmd-desc">Session status + quota usage at a glance</span>
+      </div>
+      <div class="cmd-item">
+        <span class="cmd-name">cst</span>
+        <span class="cmd-desc">Live interactive session manager — attach, kill, create</span>
+      </div>
+      <div class="cmd-item">
+        <span class="cmd-name">nt</span>
+        <span class="cmd-desc">New tmux session with interactive repo picker</span>
+      </div>
+      <div class="cmd-item">
+        <span class="cmd-name">kt</span>
+        <span class="cmd-desc">Kill a tmux session by name</span>
+      </div>
+      <div class="cmd-item">
+        <span class="cmd-name">at</span>
+        <span class="cmd-desc">Attach to an existing tmux session</span>
+      </div>
+      <div class="cmd-item">
+        <span class="cmd-name">cld</span>
+        <span class="cmd-desc">Alias for <code style="color:var(--text-muted)">claude --dangerously-skip-permissions</code></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUICKSTART -->
+<section class="quickstart" id="quickstart">
+  <div class="container">
+    <div class="qs-layout reveal">
+      <div class="qs-info">
+        <div class="section-label">Quick Start</div>
+        <h2>Up and running<br>in 30 seconds.</h2>
+        <p>
+          Clone the repo, run the installer, and restart your shell.
+          That's the whole setup. Works on Linux and macOS.
+        </p>
+        <div class="qs-reqs">
+          <span class="qs-req">python3</span>
+          <span class="qs-req">tmux</span>
+          <span class="qs-req">claude</span>
+        </div>
+      </div>
+      <div class="qs-terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="terminal-title">installation</div>
+          <div></div>
+        </div>
+        <div class="qs-steps">
+          <div class="qs-step">
+            <span class="step-num">01</span>
+            <span class="step-cmd"><span class="prompt">$</span>git clone https://github.com/samschooler/little-agents.git</span>
+            <button class="step-copy" data-cmd="git clone https://github.com/samschooler/little-agents.git">copy</button>
+          </div>
+          <div class="qs-step">
+            <span class="step-num">02</span>
+            <span class="step-cmd"><span class="prompt">$</span>cd little-agents</span>
+            <button class="step-copy" data-cmd="cd little-agents">copy</button>
+          </div>
+          <div class="qs-step">
+            <span class="step-num">03</span>
+            <span class="step-cmd"><span class="prompt">$</span>./install.sh</span>
+            <button class="step-copy" data-cmd="./install.sh">copy</button>
+          </div>
+        </div>
+        <details class="qs-details">
+          <summary>What does install.sh do?</summary>
+          <div class="qs-details-body">
+            <ol>
+              <li>Checks that <code>python3</code>, <code>tmux</code>, and <code>claude</code> are installed</li>
+              <li>Detects your shell and adds a <code>source</code> line to <code>.bashrc</code> or <code>.zshrc</code></li>
+            </ol>
+            <p>That's it — no sudo, no global installs, no package managers.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span><span style="color:var(--green)">~</span> little agents</span>
+      <div class="footer-links">
+        <a href="https://github.com/samschooler/little-agents" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/samschooler/little-agents/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Terminal animation
+const terminalLines = [
+  { text: '    ', classes: '' },
+  { html: '    <span class="w">q)</span> <span class="r">●</span> hyper <span class="d">[hyper]</span> <span class="c">◉ waiting</span>' },
+  { html: '    <span class="w">w)</span>   api   <span class="d">[api]</span>   <span class="y">💭 thinking</span>' },
+  { html: '    <span class="w">e)</span>   docs  <span class="d">[docs]</span>  <span class="y">⚡ Write</span>' },
+  { text: '' },
+  { html: '  <span class="g">⚡7.0M (5%)</span> <span class="d">resets 4h46m</span>' },
+  { html: '  <span class="d">[q-e] attach  [k] kill  [n] new  [esc] quit</span><span class="cursor"></span>' },
+];
+
+function renderTerminal() {
+  const output = document.getElementById('terminal-output');
+  output.innerHTML = '';
+  terminalLines.forEach((line, i) => {
+    const el = document.createElement('span');
+    el.className = 'line';
+    el.style.animationDelay = `${0.6 + i * 0.08}s`;
+    if (line.html) {
+      el.innerHTML = line.html;
+    } else {
+      el.textContent = line.text || '\u00A0';
+    }
+    output.appendChild(el);
+  });
+}
+
+renderTerminal();
+
+// Quota bar animation
+function animateQuota() {
+  const bar = document.getElementById('quota-bar');
+  const value = document.getElementById('quota-value');
+  const pct = document.getElementById('quota-pct');
+  const target = 5;
+
+  let current = 0;
+  const interval = setInterval(() => {
+    current += 0.2;
+    if (current >= target) {
+      current = target;
+      clearInterval(interval);
+    }
+    bar.style.width = current + '%';
+    value.textContent = (current * 120 / 100).toFixed(1) + 'M / 120M';
+    pct.textContent = Math.round(current) + '%';
+  }, 40);
+}
+
+// Scroll reveal
+const revealEls = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+
+      // Trigger quota animation when visible
+      if (entry.target.closest('.quota-section')) {
+        animateQuota();
+      }
+    }
+  });
+}, { threshold: 0.15 });
+
+revealEls.forEach(el => observer.observe(el));
+
+// Copy buttons
+document.querySelectorAll('.step-copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cmd = btn.getAttribute('data-cmd');
+    navigator.clipboard.writeText(cmd).then(() => {
+      btn.textContent = 'copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+});
+</script>
+
+</body>
+</html>
