@@ -18,6 +18,10 @@ Lightweight tmux session manager and quota tracker for [Claude Code](https://doc
 - **`kt <name>`** / **`at <name>`** — kill / attach session
 - **`cld`** — alias for `claude --dangerously-skip-permissions`
 
+## Unread indicator
+
+A red `●` dot appears before the session name when an agent finishes working (transitions from thinking/tool use to waiting) and you haven't attached to that session yet. It shows in both `cs` and `cst`. Attaching to the session clears it. If you're already attached when the agent completes, no dot is shown.
+
 ## Quota tracking
 
 Tracks real token usage (input, output, cache) from assistant messages in `~/.claude/projects/**/*.jsonl`, grouped into 5-hour billing blocks matching Claude's billing windows. Based on how [ccusage](https://github.com/ryoppippi/ccusage) calculates session blocks.
