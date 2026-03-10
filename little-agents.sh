@@ -6,14 +6,44 @@ LITTLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
 
 alias cld='claude --dangerously-skip-permissions'
 
+# zsh uses -k1, bash uses -n1
+if [ -n "$ZSH_VERSION" ]; then
+    _ct_readkey() { read -rsk1 "$@"; }
+else
+    _ct_readkey() { read -rsn1 "$@"; }
+fi
+
+_CT_KEYS="qwertyuiopasdfghjlzxcvbnm"
+
+_ct_keylabel() {
+    local _i=$1 _klen=${#_CT_KEYS}
+    local _p=$((_i / _klen)) _l=${_CT_KEYS:$((_i % _klen)):1}
+    if [ $_p -eq 0 ]; then printf '%s' "$_l"; else printf '%s%s' "$_p" "$_l"; fi
+}
+
+_ct_keyidx() {
+    local _input=$1 _klen=${#_CT_KEYS} _p=0 _l="$_input"
+    if [ ${#_input} -eq 2 ]; then _p=${_input:0:1}; _l=${_input:1:1}; fi
+    local _before="${_CT_KEYS%%"$_l"*}"
+    if [ ${#_before} -eq $_klen ]; then return 1; fi
+    echo $((_p * _klen + ${#_before}))
+}
+
+# Read a selection key - if digit, wait for a letter to form prefix (e.g. "1q")
+_ct_sel=""
+_ct_readsel() {
+    _ct_readkey "$@" _ct_sel || return 1
+    if [[ "$_ct_sel" =~ ^[0-9]$ ]]; then
+        local _ch2; _ct_readkey _ch2; _ct_sel="${_ct_sel}${_ch2}"
+    fi
+}
+
 _ct_pick_repo() {
-    local _rkeys="qwertyuiopasdfghjlzxcvbnm"
     local _repos=() _i=0
     for _d in ~/repo/*/; do
         [ -d "$_d" ] || continue
         _repos+=("${_d%/}")
-        local _k=${_rkeys:$_i:1}
-        echo "    ${_k}) $(basename "${_d%/}")"
+        echo "    $(_ct_keylabel $_i)) $(basename "${_d%/}")"
         _i=$((_i+1))
     done
     if [ ${#_repos[@]} -eq 0 ]; then
@@ -21,17 +51,16 @@ _ct_pick_repo() {
     fi
     echo ""
     if [ ${#_repos[@]} -gt 0 ]; then
-        local _rmax=${_rkeys:$((_i-1)):1}
-        echo -ne "  \033[0;90m[${_rkeys:0:1}-${_rmax}] select  [n] new  [esc] cancel:\033[0m "
+        echo -ne "  \033[0;90m[$(_ct_keylabel 0)-$(_ct_keylabel $((_i-1)))] select  [n] new  [esc] cancel:\033[0m "
     else
         echo -ne "  \033[0;90m[n] new  [esc] cancel:\033[0m "
     fi
-    read -rsn1 _rn
-    if [[ "$_rn" = $'\e' || -z "$_rn" ]]; then
+    _ct_readsel
+    if [[ "$_ct_sel" = $'\e' || -z "$_ct_sel" ]]; then
         return 1
-    elif [[ "$_rn" =~ ^[nN]$ ]]; then
+    elif [[ "$_ct_sel" =~ ^[nN]$ ]]; then
         echo ""
-        read -rp "  New repo name: " _newrepo
+        echo -n "  New repo name: "; read -r _newrepo
         if [ -n "$_newrepo" ]; then
             mkdir -p ~/repo/"$_newrepo"
             _ct_picked_repo=~/repo/"$_newrepo"
@@ -39,25 +68,13 @@ _ct_pick_repo() {
         fi
         return 1
     fi
-    local _ridx="${_rkeys%%"$_rn"*}"
-    if [ ${#_ridx} -lt ${#_repos[@]} ]; then
-        _ct_picked_repo="${_repos[${#_ridx}]}"
+    local _ridx=$(_ct_keyidx "$_ct_sel")
+    if [ -n "$_ridx" ] && [ "$_ridx" -lt ${#_repos[@]} ]; then
+        _ct_picked_repo="${_repos[$_ridx]}"
         return 0
     fi
     return 1
 }
-
-nt() {
-    local _name="${1:?session name required}"
-    _ct_picked_repo=""
-    echo "  Select repo:"
-    if _ct_pick_repo; then
-        tmux new-session -s "$_name" -c "$_ct_picked_repo" 'claude --dangerously-skip-permissions'
-    fi
-}
-
-kt() { rm -f "/tmp/claude-unread-${1:?session name required}"; tmux kill-session -t "$1"; }
-at() { rm -f "/tmp/claude-unread-${1:?session name required}"; tmux a -t "$1"; }
 
 _ct_session_status() {
     local _session=$1
@@ -69,57 +86,26 @@ _ct_session_status() {
     esac
 }
 
-_ct_quota_line() {
-    # Output: total_formatted pct reset_time
-    local _q=($(python3 "$LITTLE_AGENTS_DIR/little-agents-quota.py" 2>/dev/null))
-    local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
-    local _qc="\033[1;32m"
-    [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
-    [ "$_pct" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
-    echo -e "  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m"
-}
-
-cs() {
-    _ct_quota_line
-    local _has=false
-    while IFS=' ' read -r _s _p _c _cwd; do
-        if ! $_has; then echo "  Sessions:"; _has=true; fi
-        local _st="" _dot=""
-        if [ "$_c" = "claude" ]; then
-            _st=" $(_ct_session_status "$_s")"
-            [ -f "/tmp/claude-unread-${_s}" ] && _dot=" \033[1;31m●\033[0m"
-        fi
-        local _dir="${_cwd#$HOME/repo/}"
-        echo -e "   ${_dot} $_s \033[0;90m[$_dir]\033[0m$_st"
-    done < <(tmux list-panes -a -F '#{session_name} #{pane_pid} #{pane_current_command} #{pane_current_path}' 2>/dev/null | sort -u -k1,1)
-    if ! $_has; then echo "  No active tmux sessions"; fi
-}
-
 cst() {
-    local _keys="qwertyuiopasdfghjlzxcvbnm"
-    local _first=true
+    local _first=true _i=0
     declare -A _prev_statuses
     tput civis 2>/dev/null  # hide cursor
-    trap 'tput cnorm 2>/dev/null; trap - RETURN' RETURN
+    trap 'tput cnorm 2>/dev/null' INT TERM
     while true; do
-        # Build frame into buffer, then write at once
         local _buf=""
         local _q=($(python3 "$LITTLE_AGENTS_DIR/little-agents-quota.py" 2>/dev/null))
         local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
         local _qc="\033[1;32m"
         [ "$_pct" -ge 50 ] 2>/dev/null && _qc="\033[1;33m"
         [ "$_pct" -ge 80 ] 2>/dev/null && _qc="\033[1;31m"
-        local _sessions=() _lines=0
+        local _sessions=()
+        _i=0
         while IFS=' ' read -r _s _p _c _cwd; do
             _sessions+=("$_s")
-            local _i=${#_sessions[@]}
-            local _k=${_keys:$((_i-1)):1}
-            local _st=""
-            local _dot=""
+            local _st="" _dot=""
             if [ "$_c" = "claude" ]; then
                 local _cur_status=$(cat "/tmp/claude-status-${_s}" 2>/dev/null)
                 local _prev=${_prev_statuses[$_s]:-}
-                # Mark unread on transition to waiting, only if no one is attached
                 if [[ -n "$_prev" && "$_prev" != "waiting" && "$_prev" != "" && ( "$_cur_status" = "waiting" || -z "$_cur_status" ) ]]; then
                     if ! tmux list-clients -t "$_s" 2>/dev/null | grep -q .; then
                         touch "/tmp/claude-unread-${_s}"
@@ -130,44 +116,46 @@ cst() {
                 _st=" $(_ct_session_status "$_s")"
             fi
             local _dir="${_cwd#$HOME/repo/}"
-            _buf+="    \033[1;37m${_k})\033[0m${_dot} $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
-            _lines=$((_lines+1))
+            _buf+="    \033[1;37m$(_ct_keylabel $_i))\033[0m${_dot} $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
+            _i=$((_i+1))
         done < <(tmux list-panes -a -F '#{session_name} #{pane_pid} #{pane_current_command} #{pane_current_path}' 2>/dev/null | sort -u -k1,1)
         if [ ${#_sessions[@]} -eq 0 ]; then
             _buf+="  No active tmux sessions\033[K\n"
-            _lines=$((_lines+1))
         fi
         _buf+="\033[K\n"
         _buf+="  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m\033[K\n"
-        local _max=${_keys:$((${#_sessions[@]}-1)):1}
-        _buf+="  \033[0;90m[${_keys:0:1}-${_max}] attach  [k] kill  [n] new  [esc] quit\033[0m\033[K"
-        # Clear on first draw, then reposition cursor
+        if [ ${#_sessions[@]} -gt 0 ]; then
+            _buf+="  \033[0;90m[$(_ct_keylabel 0)-$(_ct_keylabel $((${#_sessions[@]}-1)))] attach  [k] kill  [n] new  [esc] quit\033[0m\033[K"
+        else
+            _buf+="  \033[0;90m[n] new  [esc] quit\033[0m\033[K"
+        fi
         if $_first; then
             clear
             _first=false
         else
-            printf '\033[H'  # cursor to top-left
+            printf '\033[H'
         fi
         printf '%b' "$_buf"
-        printf '\033[J'  # clear any leftover lines below
-        read -rsn1 -t 0.5 _n || continue
-        if [[ "$_n" = $'\e' ]]; then
+        printf '\033[J'
+        _ct_readsel -t 0.5 || continue
+        if [[ "$_ct_sel" = $'\e' ]]; then
+            tput cnorm 2>/dev/null
             return
-        elif [[ "$_n" =~ ^[kK]$ ]]; then
+        elif [[ "$_ct_sel" =~ ^[kK]$ ]]; then
             echo ""
-            echo -ne "  \033[0;90mKill session [letter or esc]:\033[0m "
-            read -rsn1 _kn
-            if [[ "$_kn" = $'\e' || -z "$_kn" ]]; then
+            echo -ne "  \033[0;90mKill session [key or esc]:\033[0m "
+            _ct_readsel
+            if [[ "$_ct_sel" = $'\e' || -z "$_ct_sel" ]]; then
                 continue
             fi
-            local _kidx="${_keys%%"$_kn"*}"
-            if [ ${#_kidx} -lt ${#_sessions[@]} ]; then
-                rm -f "/tmp/claude-unread-${_sessions[${#_kidx}]}"
-                tmux kill-session -t "${_sessions[${#_kidx}]}"
+            local _kidx=$(_ct_keyidx "$_ct_sel")
+            if [ -n "$_kidx" ] && [ "$_kidx" -lt ${#_sessions[@]} ]; then
+                rm -f "/tmp/claude-unread-${_sessions[$_kidx]}"
+                tmux kill-session -t "${_sessions[$_kidx]}"
             fi
-        elif [[ "$_n" =~ ^[nN]$ ]]; then
+        elif [[ "$_ct_sel" =~ ^[nN]$ ]]; then
             echo ""
-            read -rp "  Session name: " _name
+            echo -n "  Session name: "; read -r _name
             if [ -n "$_name" ]; then
                 echo "  Select repo:"
                 _ct_picked_repo=""
@@ -176,10 +164,10 @@ cst() {
                 fi
             fi
         else
-            local _idx="${_keys%%"$_n"*}"
-            if [ ${#_idx} -lt ${#_sessions[@]} ]; then
-                rm -f "/tmp/claude-unread-${_sessions[${#_idx}]}"
-                tmux a -t "${_sessions[${#_idx}]}"
+            local _idx=$(_ct_keyidx "$_ct_sel")
+            if [ -n "$_idx" ] && [ "$_idx" -lt ${#_sessions[@]} ]; then
+                rm -f "/tmp/claude-unread-${_sessions[$_idx]}"
+                tmux a -t "${_sessions[$_idx]}"
             fi
         fi
     done
@@ -190,13 +178,9 @@ if [ -n "$SSH_CONNECTION" ]; then
     echo ""
     echo "  Shortcuts:"
     echo "    cld  - claude --dangerously-skip-permissions"
-    echo "    cs   - claude session status"
-    echo "    cst  - claude session manager (live, k to kill)"
-    echo "    nt   - tmux new-session <name>"
-    echo "    kt   - tmux kill-session <name>"
-    echo "    at   - tmux attach <name>"
+    echo "    cst  - claude session manager"
     echo "    C-b d - detach from session"
     echo ""
-    cs
+    cst
     echo ""
 fi
