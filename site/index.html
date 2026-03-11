@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Little Agents — tmux session manager for Claude Code</title>
-<meta name="description" content="Lightweight tmux session manager and quota tracker for Claude Code. Manage sessions, track token usage, and stay in flow.">
+<title>Little Agents — tmux session manager for Claude Code & Codex</title>
+<meta name="description" content="Lightweight tmux session manager and quota tracker for Claude Code and Codex. Manage sessions, track token usage, and stay in flow.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -902,8 +902,8 @@ footer {
     <h1>Little<br><span>Agents</span></h1>
     <p class="hero-sub">
       A lightweight tmux session manager and quota tracker
-      for Claude Code. One command to manage all your agents,
-      track token usage, and stay in the flow.
+      for Claude Code and Codex. One command to manage all
+      your agents, track token usage, and stay in the flow.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn-primary">
@@ -947,14 +947,14 @@ footer {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="M2 9h20"/><circle cx="6" cy="6" r="1" fill="#22c55e"/><circle cx="9.5" cy="6" r="1" fill="#22c55e"/></svg>
         </div>
         <h3>Session Management</h3>
-        <p>Create, attach, kill, and switch between tmux sessions with single-key shortcuts. Works with both bash and zsh, and scales to 25+ sessions with digit-prefix keys.</p>
+        <p>Create, attach, kill, and switch between tmux sessions with single-key shortcuts. Toggle between Claude and Codex as your launcher with one key. Works with bash and zsh.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
         <h3>Quota Tracking</h3>
-        <p>Real-time token usage across Claude's 5-hour billing windows. Color-coded from green to red so you always know where you stand. Auto-detects your tier.</p>
+        <p>Real-time token usage across Claude's 5-hour billing windows. Color-coded from green to red so you always know where you stand. Auto-detects your subscription tier.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">
@@ -1041,7 +1041,7 @@ footer {
     <div class="cmd-grid reveal">
       <div class="cmd-item">
         <span class="cmd-name">cst</span>
-        <span class="cmd-desc">Live interactive session manager — attach, kill, create, and track quota. All in one place.</span>
+        <span class="cmd-desc">Live interactive session manager — attach, kill, create, track quota, and toggle between Claude and Codex.</span>
       </div>
       <div class="cmd-item">
         <span class="cmd-name">cld</span>
@@ -1065,7 +1065,7 @@ footer {
         <div class="qs-reqs">
           <span class="qs-req">python3</span>
           <span class="qs-req">tmux</span>
-          <span class="qs-req">claude</span>
+          <span class="qs-req">claude or codex</span>
         </div>
       </div>
       <div class="qs-terminal">
@@ -1130,7 +1130,7 @@ const terminalLines = [
   { html: '    <span class="w">e)</span>   docs  <span class="d">[docs]</span>  <span class="y">⚡ Write</span>' },
   { text: '' },
   { html: '  <span class="g">⚡7.0M (5%)</span> <span class="d">resets 4h46m</span>' },
-  { html: '  <span class="d">[q-e] attach  [k] kill  [n] new  [esc] quit</span> <span class="cursor"></span>' },
+  { html: '  <span class="d">[q-e] attach  [k] kill  [n] new  [c] cli:claude  [esc] quit</span> <span class="cursor"></span>' },
 ];
 
 function renderTerminal() {
