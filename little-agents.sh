@@ -145,11 +145,8 @@ _ct_session_status() {
     local _session=$1 _agent=${2:-claude}
     local _live
     if [ "$_agent" = "codex" ]; then
-        # Prefer notify hook status file, fall back to pane scraping
-        _live=$(cat "/tmp/claude-status-${_session}" 2>/dev/null)
-        if [ -z "$_live" ] || [ "$_live" != "waiting" ]; then
-            _live=$(_ct_codex_pane_status "$_session")
-        fi
+        # Always scrape pane for codex — it's the real-time source of truth
+        _live=$(_ct_codex_pane_status "$_session")
     else
         _live=$(cat "/tmp/claude-status-${_session}" 2>/dev/null)
     fi
