@@ -1,5 +1,7 @@
 # Little Agents
 
+[littleagents.sam.ink](https://littleagents.sam.ink)
+
 Lightweight tmux session manager and quota tracker for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex).
 
 ```
