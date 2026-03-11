@@ -883,7 +883,6 @@ footer {
   </div>
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
-    <li><a href="#commands">Commands</a></li>
     <li><a href="#quickstart">Install</a></li>
   </ul>
   <a href="https://github.com/samschooler/little-agents" target="_blank" rel="noopener" class="nav-github">
@@ -925,7 +924,7 @@ footer {
         <div class="terminal-dots">
           <span></span><span></span><span></span>
         </div>
-        <div class="terminal-title">cst — little agents session manager</div>
+        <div class="terminal-title">lila — little agents session manager</div>
         <div></div>
       </div>
       <div class="terminal-body" id="terminal-output">
@@ -1031,26 +1030,6 @@ footer {
   </div>
 </section>
 
-<!-- COMMANDS -->
-<section class="commands" id="commands">
-  <div class="container">
-    <div class="reveal">
-      <div class="section-label">Commands</div>
-      <h2 class="section-title">Two commands.<br>That's it.</h2>
-    </div>
-    <div class="cmd-grid reveal">
-      <div class="cmd-item">
-        <span class="cmd-name">cst</span>
-        <span class="cmd-desc">Live interactive session manager — attach, kill, create, track quota, and toggle between Claude and Codex.</span>
-      </div>
-      <div class="cmd-item">
-        <span class="cmd-name">cld</span>
-        <span class="cmd-desc">Alias for <code style="color:var(--text-muted)">claude --dangerously-skip-permissions</code></span>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- QUICKSTART -->
 <section class="quickstart" id="quickstart">
   <div class="container">
@@ -1091,6 +1070,11 @@ footer {
             <span class="step-num">03</span>
             <span class="step-cmd"><span class="prompt">$</span>./install.sh</span>
             <button class="step-copy" data-cmd="./install.sh">copy</button>
+          </div>
+          <div class="qs-step">
+            <span class="step-num">04</span>
+            <span class="step-cmd"><span class="prompt">$</span>lila</span>
+            <button class="step-copy" data-cmd="lila">copy</button>
           </div>
         </div>
         <details class="qs-details">

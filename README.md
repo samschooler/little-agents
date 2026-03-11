@@ -1,6 +1,6 @@
 # Little Agents
 
-Lightweight tmux session manager and quota tracker for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+Lightweight tmux session manager and quota tracker for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex).
 
 ```
     q) hyper [hyper] ◉ waiting
@@ -12,10 +12,9 @@ Lightweight tmux session manager and quota tracker for [Claude Code](https://doc
 
 ## Commands
 
-- **`cst`** — live interactive session manager (attach, kill, create, quota, toggle launcher)
-- **`cld`** — alias for `claude --dangerously-skip-permissions`
+- **`lila`** — live interactive session manager (attach, kill, create, quota, toggle launcher)
 
-Inside `cst`, press `c` to switch the launcher between `claude` and `codex` (persisted). Press `n` to create a new session, `k` to kill, or any session key to attach.
+Inside `lila`, press `c` to switch the launcher between `claude` and `codex` (persisted). Press `n` to create a new session, `k` to kill, or any session key to attach.
 
 ## Unread indicator
 
@@ -37,7 +36,7 @@ Color coding: green < 50%, yellow 50–79%, red 80%+.
 
 ## Install
 
-Requires `python3`, `tmux`, and `claude`.
+Requires `python3`, `tmux`, and `claude` or `codex`.
 
 ```bash
 git clone https://github.com/samschooler/little-agents.git

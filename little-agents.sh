@@ -5,7 +5,6 @@
 LITTLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
 _CT_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/little-agents"
 
-alias cld='claude --dangerously-skip-permissions'
 
 # zsh uses -k1, bash uses -n1
 if [ -n "$ZSH_VERSION" ]; then
@@ -34,7 +33,7 @@ _ct_launcher_set() {
 
 _ct_launcher_cmd() {
     case "$1" in
-        codex) printf 'codex' ;;
+        codex) printf 'codex --dangerously-bypass-approvals-and-sandbox' ;;
         *) printf 'claude --dangerously-skip-permissions' ;;
     esac
 }
@@ -126,7 +125,7 @@ _ct_session_status() {
     esac
 }
 
-cst() {
+lila() {
     local _first=true _i=0
     declare -A _prev_statuses
     tput civis 2>/dev/null  # hide cursor
@@ -226,10 +225,9 @@ cst() {
 if [ -n "$SSH_CONNECTION" ]; then
     echo ""
     echo "  Shortcuts:"
-    echo "    cld  - claude --dangerously-skip-permissions"
-    echo "    cst  - claude session manager"
+    echo "    lila  - little agents session manager"
     echo "    C-b d - detach from session"
     echo ""
-    cst
+    lila
     echo ""
 fi
