@@ -3,6 +3,7 @@
 # Source this file from your .bashrc or .zshrc
 
 LITTLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
+_CT_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/little-agents"
 
 alias cld='claude --dangerously-skip-permissions'
 
@@ -14,6 +15,29 @@ else
 fi
 
 _CT_KEYS="qwertyuiopasdfghjlzxcvbnm"
+
+_ct_launcher_get() {
+    local _launcher="claude"
+    if [ -f "$_CT_STATE_DIR/launcher" ]; then
+        read -r _launcher < "$_CT_STATE_DIR/launcher"
+    fi
+    case "$_launcher" in
+        claude|codex) printf '%s' "$_launcher" ;;
+        *) printf 'claude' ;;
+    esac
+}
+
+_ct_launcher_set() {
+    mkdir -p "$_CT_STATE_DIR"
+    printf '%s\n' "$1" > "$_CT_STATE_DIR/launcher"
+}
+
+_ct_launcher_cmd() {
+    case "$1" in
+        codex) printf 'codex' ;;
+        *) printf 'claude --dangerously-skip-permissions' ;;
+    esac
+}
 
 _ct_keylabel() {
     local _i=$1 _klen=${#_CT_KEYS}
@@ -93,6 +117,7 @@ cst() {
     trap 'tput cnorm 2>/dev/null' INT TERM
     while true; do
         local _buf=""
+        local _launcher=$(_ct_launcher_get)
         local _q=($(python3 "$LITTLE_AGENTS_DIR/little-agents-quota.py" 2>/dev/null))
         local _tot=${_q[0]:-0} _pct=${_q[1]:-0} _rst=${_q[2]:---}
         local _qc="\033[1;32m"
@@ -125,9 +150,9 @@ cst() {
         _buf+="\033[K\n"
         _buf+="  ${_qc}⚡${_tot} (${_pct}%)\033[0m \033[0;90mresets ${_rst}\033[0m\033[K\n"
         if [ ${#_sessions[@]} -gt 0 ]; then
-            _buf+="  \033[0;90m[$(_ct_keylabel 0)-$(_ct_keylabel $((${#_sessions[@]}-1)))] attach  [k] kill  [n] new  [esc] quit\033[0m\033[K"
+            _buf+="  \033[0;90m[$(_ct_keylabel 0)-$(_ct_keylabel $((${#_sessions[@]}-1)))] attach  [k] kill  [n] new  [c] cli:${_launcher}  [esc] quit\033[0m\033[K"
         else
-            _buf+="  \033[0;90m[n] new  [esc] quit\033[0m\033[K"
+            _buf+="  \033[0;90m[n] new  [c] cli:${_launcher}  [esc] quit\033[0m\033[K"
         fi
         if $_first; then
             clear
@@ -160,8 +185,14 @@ cst() {
                 echo "  Select repo:"
                 _ct_picked_repo=""
                 if _ct_pick_repo; then
-                    tmux new-session -d -s "$_name" -c "$_ct_picked_repo" 'claude --dangerously-skip-permissions' && tmux a -t "$_name"
+                    tmux new-session -d -s "$_name" -c "$_ct_picked_repo" "$(_ct_launcher_cmd "$(_ct_launcher_get)")" && tmux a -t "$_name"
                 fi
+            fi
+        elif [[ "$_ct_sel" =~ ^[cC]$ ]]; then
+            if [ "$_launcher" = "claude" ]; then
+                _ct_launcher_set "codex"
+            else
+                _ct_launcher_set "claude"
             fi
         else
             local _idx=$(_ct_keyidx "$_ct_sel")

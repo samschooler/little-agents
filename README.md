@@ -7,20 +7,19 @@ Lightweight tmux session manager and quota tracker for [Claude Code](https://doc
     w) api   [api]   💭 thinking
 
   ⚡7.0M (5%) resets 4h46m
-  [q-w] attach  [k] kill  [n] new  [esc] quit
+  [q-w] attach  [k] kill  [n] new  [c] cli:claude  [esc] quit
 ```
 
 ## Commands
 
-- **`cs`** — session status + quota usage
-- **`cst`** — live interactive session manager (attach, kill, create)
-- **`nt <name>`** — new tmux session with repo picker
-- **`kt <name>`** / **`at <name>`** — kill / attach session
+- **`cst`** — live interactive session manager (attach, kill, create, quota, toggle launcher)
 - **`cld`** — alias for `claude --dangerously-skip-permissions`
+
+Inside `cst`, press `c` to switch the launcher between `claude` and `codex` (persisted). Press `n` to create a new session, `k` to kill, or any session key to attach.
 
 ## Unread indicator
 
-A red `●` dot appears before the session name when an agent finishes working (transitions from thinking/tool use to waiting) and you haven't attached to that session yet. It shows in both `cs` and `cst`. Attaching to the session clears it. If you're already attached when the agent completes, no dot is shown.
+A red `●` dot appears before the session name when an agent finishes working (transitions from thinking/tool use to waiting) and you haven't attached to that session yet. Attaching to the session clears it. If you're already attached when the agent completes, no dot is shown.
 
 ## Quota tracking
 
