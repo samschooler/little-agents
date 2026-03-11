@@ -115,9 +115,44 @@ _ct_pick_repo() {
     return 1
 }
 
-_ct_session_status() {
+_ct_is_codex() {
+    local _pid=$1
+    pgrep -P "$(pgrep -P "$_pid" 2>/dev/null | head -1)" -x codex >/dev/null 2>&1
+}
+
+_ct_codex_pane_status() {
     local _session=$1
-    local _live=$(cat "/tmp/claude-status-${_session}" 2>/dev/null)
+    local _pane
+    _pane=$(tmux capture-pane -t "$_session" -p 2>/dev/null) || return
+    local _last10
+    _last10=$(echo "$_pane" | tail -10)
+    # › prompt = waiting for input
+    if echo "$_last10" | grep -q $'\xe2\x80\xba'; then
+        echo "waiting"
+        return
+    fi
+    # Tool patterns from codex TUI
+    local _tool
+    _tool=$(echo "$_last10" | grep -oP '• (Ran|Read|Wrote|Edited|Searched|Created|Deleted|Patched)\b' | tail -1 | sed 's/• //')
+    if [ -n "$_tool" ]; then
+        echo "$_tool"
+        return
+    fi
+    echo "thinking"
+}
+
+_ct_session_status() {
+    local _session=$1 _agent=${2:-claude}
+    local _live
+    if [ "$_agent" = "codex" ]; then
+        # Prefer notify hook status file, fall back to pane scraping
+        _live=$(cat "/tmp/claude-status-${_session}" 2>/dev/null)
+        if [ -z "$_live" ] || [ "$_live" != "waiting" ]; then
+            _live=$(_ct_codex_pane_status "$_session")
+        fi
+    else
+        _live=$(cat "/tmp/claude-status-${_session}" 2>/dev/null)
+    fi
     case "$_live" in
         waiting|"")  echo "\033[1;36m◉ waiting\033[0m" ;;
         thinking)    echo "\033[1;33m💭 thinking\033[0m" ;;
@@ -142,9 +177,19 @@ lila() {
         _i=0
         while IFS=' ' read -r _s _p _c _cwd; do
             _sessions+=("$_s")
-            local _st="" _dot=""
+            local _st="" _dot="" _agent=""
             if [ "$_c" = "claude" ]; then
-                local _cur_status=$(cat "/tmp/claude-status-${_s}" 2>/dev/null)
+                _agent="claude"
+            elif [ "$_c" = "node" ] && _ct_is_codex "$_p"; then
+                _agent="codex"
+            fi
+            if [ -n "$_agent" ]; then
+                local _cur_status
+                if [ "$_agent" = "codex" ]; then
+                    _cur_status=$(_ct_codex_pane_status "$_s")
+                else
+                    _cur_status=$(cat "/tmp/claude-status-${_s}" 2>/dev/null)
+                fi
                 local _prev=${_prev_statuses[$_s]:-}
                 if [[ -n "$_prev" && "$_prev" != "waiting" && "$_prev" != "" && ( "$_cur_status" = "waiting" || -z "$_cur_status" ) ]]; then
                     if ! tmux list-clients -t "$_s" 2>/dev/null | grep -q .; then
@@ -153,7 +198,7 @@ lila() {
                 fi
                 _prev_statuses[$_s]="$_cur_status"
                 [ -f "/tmp/claude-unread-${_s}" ] && _dot=" \033[1;31m●\033[0m"
-                _st=" $(_ct_session_status "$_s")"
+                _st=" $(_ct_session_status "$_s" "$_agent")"
             fi
             local _dir="${_cwd#$HOME/repo/}"
             _buf+="    \033[1;37m$(_ct_keylabel $_i))\033[0m${_dot} $_s \033[0;90m[$_dir]\033[0m$_st\033[K\n"
