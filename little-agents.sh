@@ -46,11 +46,27 @@ _ct_keylabel() {
 }
 
 _ct_keyidx() {
-    local _input=$1 _klen=${#_CT_KEYS} _p=0 _l="$_input"
+    local _input=$1
+    local _klen=${#_CT_KEYS}
+    local _p=0
+    local _l="$_input"
     if [ ${#_input} -eq 2 ]; then _p=${_input:0:1}; _l=${_input:1:1}; fi
-    local _before="${_CT_KEYS%%"$_l"*}"
-    if [ ${#_before} -eq $_klen ]; then return 1; fi
-    echo $((_p * _klen + ${#_before}))
+    local _i
+    for ((_i = 0; _i < _klen; _i++)); do
+        if [ "${_CT_KEYS:_i:1}" = "$_l" ]; then
+            echo $((_p * _klen + _i))
+            return 0
+        fi
+    done
+    return 1
+}
+
+_ct_array_get() {
+    local _name=$1 _idx=$2
+    if [ -n "$ZSH_VERSION" ]; then
+        _idx=$((_idx + 1))
+    fi
+    eval "printf '%s' \"\${${_name}[$_idx]}\""
 }
 
 # Read a selection key - if digit, wait for a letter to form prefix (e.g. "1q")
@@ -94,7 +110,7 @@ _ct_pick_repo() {
     fi
     local _ridx=$(_ct_keyidx "$_ct_sel")
     if [ -n "$_ridx" ] && [ "$_ridx" -lt ${#_repos[@]} ]; then
-        _ct_picked_repo="${_repos[$_ridx]}"
+        _ct_picked_repo="$(_ct_array_get _repos "$_ridx")"
         return 0
     fi
     return 1
@@ -175,8 +191,9 @@ cst() {
             fi
             local _kidx=$(_ct_keyidx "$_ct_sel")
             if [ -n "$_kidx" ] && [ "$_kidx" -lt ${#_sessions[@]} ]; then
-                rm -f "/tmp/claude-unread-${_sessions[$_kidx]}"
-                tmux kill-session -t "${_sessions[$_kidx]}"
+                local _ksession=$(_ct_array_get _sessions "$_kidx")
+                rm -f "/tmp/claude-unread-${_ksession}"
+                tmux kill-session -t "$_ksession"
             fi
         elif [[ "$_ct_sel" =~ ^[nN]$ ]]; then
             echo ""
@@ -197,8 +214,9 @@ cst() {
         else
             local _idx=$(_ct_keyidx "$_ct_sel")
             if [ -n "$_idx" ] && [ "$_idx" -lt ${#_sessions[@]} ]; then
-                rm -f "/tmp/claude-unread-${_sessions[$_idx]}"
-                tmux a -t "${_sessions[$_idx]}"
+                local _session=$(_ct_array_get _sessions "$_idx")
+                rm -f "/tmp/claude-unread-${_session}"
+                tmux a -t "$_session"
             fi
         fi
     done
