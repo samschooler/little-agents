@@ -108,7 +108,10 @@ func scheduleCmd(args []string) {
 			fmt.Fprintln(os.Stderr, "Usage: lila schedule rm <name>")
 			os.Exit(1)
 		}
-		scheduleRm(args[1])
+		if err := scheduleRm(args[1]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "edit":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "Usage: lila schedule edit <name>")
@@ -308,10 +311,9 @@ func scheduleList() {
 	}
 }
 
-func scheduleRm(name string) {
+func scheduleRm(name string) error {
 	if err := removeScheduleFromCrontab(name); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	os.Remove(promptPath(name))
 	runs := listRuns(name)
@@ -319,6 +321,7 @@ func scheduleRm(name string) {
 		os.Remove(filepath.Join(runsDir(), r.Filename))
 	}
 	fmt.Printf("  Removed schedule %q\n", name)
+	return nil
 }
 
 func scheduleEdit(name string) {

@@ -217,6 +217,12 @@ func listRuns(name string) []RunInfo {
 		if !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
+		// Verify the character after the prefix is a digit (start of timestamp)
+		// to avoid matching "task-runner-..." when looking for "task-"
+		rest := strings.TrimPrefix(e.Name(), prefix)
+		if len(rest) == 0 || rest[0] < '0' || rest[0] > '9' {
+			continue
+		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			continue
