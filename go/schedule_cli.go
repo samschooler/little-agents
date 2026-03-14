@@ -196,11 +196,23 @@ func scheduleAdd(name string) {
 		once = true
 		fmt.Printf("  → %s (once)\n", cronDescribe(cronExpr))
 	} else {
-		fmt.Print("  Cron expression (e.g. '0 8 * * *' for daily at 8AM): ")
-		cronExpr, _ = reader.ReadString('\n')
-		cronExpr = strings.TrimSpace(cronExpr)
+		fmt.Print("  Schedule (cron expression or plain English): ")
+		cronInput, _ := reader.ReadString('\n')
+		cronInput = strings.TrimSpace(cronInput)
+		if looksLikeCron(cronInput) {
+			cronExpr = cronInput
+		} else {
+			fmt.Print("  Generating cron expression...")
+			generated, err := generateCronExpr(cronInput)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\n  Error: %v\n", err)
+				os.Exit(1)
+			}
+			cronExpr = generated
+			fmt.Print("\r\033[K") // clear the "Generating..." line
+		}
 		desc := cronDescribe(cronExpr)
-		fmt.Printf("  → %s. Correct? [y/n]: ", desc)
+		fmt.Printf("  → %s (%s). Correct? [y/n]: ", desc, cronExpr)
 		confirm, _ := reader.ReadString('\n')
 		if strings.TrimSpace(confirm) != "y" && strings.TrimSpace(confirm) != "Y" {
 			fmt.Println("  Cancelled.")
@@ -284,6 +296,37 @@ func scheduleAdd(name string) {
 		os.Exit(1)
 	}
 	fmt.Printf("  Schedule %q created: %s (%s)\n", name, cronExpr, cronDescribe(cronExpr))
+}
+
+// looksLikeCron returns true if the input looks like a cron expression
+// (starts with a number, *, or /).
+func looksLikeCron(s string) bool {
+	if s == "" {
+		return false
+	}
+	fields := strings.Fields(s)
+	if len(fields) != 5 {
+		return false
+	}
+	// Check if first field looks like a cron field
+	c := fields[0][0]
+	return c == '*' || (c >= '0' && c <= '9')
+}
+
+// generateCronExpr uses claude to convert plain English to a cron expression.
+func generateCronExpr(description string) (string, error) {
+	prompt := fmt.Sprintf("Convert this schedule description to a standard 5-field cron expression. Reply with ONLY the cron expression, nothing else. No explanation, no backticks, just the 5 fields separated by spaces.\n\n%s", description)
+	out, err := exec.Command("claude", "-p", prompt).Output()
+	if err != nil {
+		return "", fmt.Errorf("claude failed: %w", err)
+	}
+	result := strings.TrimSpace(string(out))
+	// Validate it looks like a cron expression
+	fields := strings.Fields(result)
+	if len(fields) != 5 {
+		return "", fmt.Errorf("claude returned invalid cron expression: %q", result)
+	}
+	return result, nil
 }
 
 func scheduleList() {
