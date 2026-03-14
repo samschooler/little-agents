@@ -408,8 +408,9 @@ func runTUI(promptMe bool) {
 				if name != "" {
 					fmt.Println("  Select repo:")
 					repos := listRepos()
+					repoKeys := activeKeys(map[byte]bool{'n': true})
 					for i, r := range repos {
-						fmt.Printf("    %s) %s\r\n", keyLabel(i, allKeys), r)
+						fmt.Printf("    %s) %s\r\n", keyLabel(i, repoKeys), r)
 					}
 					if len(repos) == 0 {
 						fmt.Println("    (none)")
@@ -417,7 +418,7 @@ func runTUI(promptMe bool) {
 					fmt.Println()
 					if len(repos) > 0 {
 						fmt.Printf("  \033[0;90m[%s-%s] select  [n] new  [esc] cancel:\033[0m ",
-							keyLabel(0, allKeys), keyLabel(len(repos)-1, allKeys))
+							keyLabel(0, repoKeys), keyLabel(len(repos)-1, repoKeys))
 					} else {
 						fmt.Print("  \033[0;90m[n] new  [esc] cancel:\033[0m ")
 					}
@@ -444,7 +445,7 @@ func runTUI(promptMe bool) {
 							selectedRepo = repoPath
 						}
 					} else {
-						ridx, valid := keyIdx(rsel, allKeys)
+						ridx, valid := keyIdx(rsel, repoKeys)
 						if valid && ridx < len(repos) {
 							selectedRepo = filepath.Join(home, "repo", repos[ridx])
 						}

@@ -223,13 +223,14 @@ func scheduleAdd(name string) {
 	fmt.Println("  Select repo:")
 	repos := listRepos()
 	home, _ := os.UserHomeDir()
+	repoKeys := activeKeys(nil)
 	for i, r := range repos {
-		fmt.Printf("    %s) %s\n", keyLabel(i, allKeys), r)
+		fmt.Printf("    %s) %s\n", keyLabel(i, repoKeys), r)
 	}
 	fmt.Print("  Selection: ")
 	rsel, _ := reader.ReadString('\n')
 	rsel = strings.TrimSpace(rsel)
-	ridx, valid := keyIdx(rsel, allKeys)
+	ridx, valid := keyIdx(rsel, repoKeys)
 	if !valid || ridx >= len(repos) {
 		fmt.Fprintln(os.Stderr, "Error: invalid selection")
 		os.Exit(1)
