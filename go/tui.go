@@ -648,11 +648,7 @@ func runTUI(promptMe bool) {
 						if logPath != "" {
 							term.Restore(fd, oldState)
 							fmt.Print("\033[?25h")
-							cmd := exec.Command("less", logPath)
-							cmd.Stdin = os.Stdin
-							cmd.Stdout = os.Stdout
-							cmd.Stderr = os.Stderr
-							cmd.Run()
+							viewSessionLog(logPath)
 							oldState, _ = term.MakeRaw(fd)
 							fmt.Print("\033[?25l")
 							first = true
@@ -835,11 +831,7 @@ func runTUI(promptMe bool) {
 				if logPath != "" {
 					term.Restore(fd, oldState)
 					fmt.Print("\033[?25h")
-					cmd := exec.Command("less", logPath)
-					cmd.Stdin = os.Stdin
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
-					cmd.Run()
+					viewSessionLog(logPath)
 					oldState, _ = term.MakeRaw(fd)
 					fmt.Print("\033[?25l")
 					first = true

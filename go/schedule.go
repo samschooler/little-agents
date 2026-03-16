@@ -468,3 +468,100 @@ func sessionTokens(logPath string) int64 {
 	}
 	return total
 }
+
+// viewSessionLog parses a Claude Code JSONL session log and pipes a
+// human-readable, colored rendering into less -R.
+func viewSessionLog(logPath string) error {
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return err
+	}
+
+	var buf strings.Builder
+
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+
+		entryType, _ := entry["type"].(string)
+		if entryType != "user" && entryType != "assistant" {
+			continue
+		}
+
+		msg, ok := entry["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		content := msg["content"]
+
+		switch c := content.(type) {
+		case string:
+			if c != "" {
+				writeRoleHeader(&buf, role)
+				buf.WriteString(c)
+				buf.WriteString("\n\n")
+			}
+		case []interface{}:
+			for _, block := range c {
+				bm, ok := block.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				blockType, _ := bm["type"].(string)
+				switch blockType {
+				case "text":
+					text, _ := bm["text"].(string)
+					if text != "" {
+						writeRoleHeader(&buf, role)
+						buf.WriteString(text)
+						buf.WriteString("\n\n")
+					}
+				case "tool_use":
+					toolName, _ := bm["name"].(string)
+					input, _ := bm["input"].(map[string]interface{})
+					buf.WriteString(fmt.Sprintf("\033[0;90m  ─── tool: %s", toolName))
+					// Show key details for common tools
+					if cmd, ok := input["command"].(string); ok {
+						if len(cmd) > 120 {
+							cmd = cmd[:117] + "..."
+						}
+						buf.WriteString(fmt.Sprintf(" → %s", cmd))
+					} else if pat, ok := input["pattern"].(string); ok {
+						buf.WriteString(fmt.Sprintf(" → %s", pat))
+					} else if fp, ok := input["file_path"].(string); ok {
+						buf.WriteString(fmt.Sprintf(" → %s", fp))
+					}
+					buf.WriteString("\033[0m\n")
+				case "tool_result":
+					// skip tool results — they're verbose
+				}
+			}
+		}
+	}
+
+	if buf.Len() == 0 {
+		fmt.Println("  (empty log)")
+		return nil
+	}
+
+	less := exec.Command("less", "-R")
+	less.Stdin = strings.NewReader(buf.String())
+	less.Stdout = os.Stdout
+	less.Stderr = os.Stderr
+	return less.Run()
+}
+
+func writeRoleHeader(buf *strings.Builder, role string) {
+	if role == "user" {
+		buf.WriteString("\033[1;34m▌ User\033[0m\n")
+	} else {
+		buf.WriteString("\033[1;32m▌ Assistant\033[0m\n")
+	}
+}
