@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Little Agents — tmux session manager for Claude Code & Codex</title>
-<meta name="description" content="Lightweight tmux session manager and quota tracker for Claude Code and Codex. Manage sessions, track token usage, and stay in flow.">
+<title>Little Agents — session manager and scheduler for Claude Code & Codex</title>
+<meta name="description" content="Manage and schedule Claude Code and Codex agents from one terminal. Run agents on autopilot with cron, track token usage, and review session logs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -420,6 +420,21 @@ nav {
 .feature-card:nth-child(3) .feature-icon {
   background: rgba(6,182,212,0.08);
   border-color: rgba(6,182,212,0.15);
+}
+
+.feature-card:nth-child(4) .feature-icon {
+  background: rgba(167,139,250,0.08);
+  border-color: rgba(167,139,250,0.15);
+}
+
+.feature-card:nth-child(5) .feature-icon {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.15);
+}
+
+.feature-card:nth-child(6) .feature-icon {
+  background: rgba(34,197,94,0.08);
+  border-color: rgba(34,197,94,0.15);
 }
 
 .feature-card h3 {
@@ -850,7 +865,7 @@ footer {
 
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
-  .feature-grid { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr !important; }
   .quota-layout { grid-template-columns: 1fr; gap: 40px; }
   .cmd-grid { grid-template-columns: 1fr; }
   .qs-layout { grid-template-columns: 1fr; }
@@ -896,13 +911,13 @@ footer {
   <div class="container">
     <div class="hero-badge">
       <span class="dot"></span>
-      v1.0 — open source
+      v2.0 — now with scheduling
     </div>
     <h1>Little<br><span>Agents</span></h1>
     <p class="hero-sub">
-      A lightweight tmux session manager and quota tracker
-      for Claude Code and Codex. One command to manage all
-      your agents, track token usage, and stay in the flow.
+      A lightweight session manager for Claude Code and Codex.
+      Manage agents, schedule them to run on autopilot, track
+      token usage, and review what they did — all from one terminal.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn-primary">
@@ -961,6 +976,27 @@ footer {
         </div>
         <h3>Interactive TUI</h3>
         <p>A live-updating terminal UI that shows all sessions with their status, working directory, and quota — one command does it all. Agents that finish while you're away get an unread <span style="color:var(--red)">●</span> dot that clears when you attach.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Agent Scheduling</h3>
+        <p>Schedule agents to run once or on a recurring cron schedule. Type plain English like "every weekday at 9am" and let Claude generate the cron expression. One-shot tasks clean up after themselves.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <h3>Run History</h3>
+        <p>Every scheduled run is tracked. Browse past runs, see status and token usage at a glance, and drill into any run to read the full conversation — rendered as a clean, scrollable log.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6"/><circle cx="12" cy="12" r="1" fill="#22c55e"/><path d="M16.24 7.76l-1.06 1.06"/></svg>
+        </div>
+        <h3>Background Daemon</h3>
+        <p>A lightweight system service watches your agents. Get notified when sessions finish, see which have unread results, and let the daemon track scheduled run outcomes — all without lifting a finger.</p>
       </div>
     </div>
   </div>
@@ -1042,7 +1078,7 @@ footer {
           That's the whole setup. Works on Linux and macOS.
         </p>
         <div class="qs-reqs">
-          <span class="qs-req">python3</span>
+          <span class="qs-req">go 1.21+</span>
           <span class="qs-req">tmux</span>
           <span class="qs-req">claude or codex</span>
         </div>
@@ -1081,10 +1117,11 @@ footer {
           <summary>What does install.sh do?</summary>
           <div class="qs-details-body">
             <ol>
-              <li>Checks that <code>python3</code>, <code>tmux</code>, and <code>claude</code> are installed</li>
-              <li>Detects your shell and adds a <code>source</code> line to <code>.bashrc</code> or <code>.zshrc</code></li>
+              <li>Builds the Go binary if it doesn't exist yet</li>
+              <li>Checks that <code>tmux</code> and <code>claude</code> (or <code>codex</code>) are installed</li>
+              <li>Adds a <code>lila</code> alias to <code>.bashrc</code> or <code>.zshrc</code></li>
             </ol>
-            <p>That's it — no sudo, no global installs, no package managers.</p>
+            <p>That's it — no sudo, no global installs, no package managers. One static binary.</p>
           </div>
         </details>
       </div>
@@ -1106,24 +1143,45 @@ footer {
 </footer>
 
 <script>
-// Terminal animation
-const terminalLines = [
-  { text: '    ', classes: '' },
-  { html: '    <span class="w">q)</span> <span class="r">●</span> hyper <span class="d">[hyper]</span> <span class="c">◉ waiting</span>' },
-  { html: '    <span class="w">w)</span>   api   <span class="d">[api]</span>   <span class="y">💭 thinking</span>' },
-  { html: '    <span class="w">e)</span>   docs  <span class="d">[docs]</span>  <span class="y">⚡ Write</span>' },
-  { text: '' },
-  { html: '  <span class="g">⚡7.0M (5%)</span> <span class="d">resets 4h46m</span>' },
-  { html: '  <span class="d">[q-e] attach  [k] kill  [n] new  [c] cli:claude  [esc] quit</span> <span class="cursor"></span>' },
-];
+// Terminal animation — alternates between sessions and schedules screens
+const screens = {
+  sessions: [
+    { text: '' },
+    { html: '    <span class="w">q)</span> <span class="r">●</span> hyper <span class="d">[hyper]</span> <span class="c">◉ waiting</span>' },
+    { html: '    <span class="w">w)</span>   api   <span class="d">[api]</span>   <span class="y">💭 thinking</span>' },
+    { html: '    <span class="w">e)</span>   docs  <span class="d">[docs]</span>  <span class="y">⚡ Write</span>' },
+    { text: '' },
+    { html: '  <span class="g">⚡7.0M (5%)</span> <span class="d">resets 4h46m</span>' },
+    { html: '  <span class="d">[q-e] attach  [k] kill  [n] new  [r] recurring  [c] cli:claude  [esc] quit</span> <span class="cursor"></span>' },
+  ],
+  schedules: [
+    { text: '' },
+    { html: '  <span class="w">Scheduled</span>' },
+    { html: '    <span class="w">q)</span> <span class="g">◆</span> daily-review    <span class="d">0 8 * * * (Daily at 8:00 AM)    [myproject]</span>' },
+    { html: '    <span class="w">w)</span> <span class="d">◇</span> <span class="d">weekly-cleanup  0 9 * * 1 (Mondays at 9:00 AM)  [api]</span>' },
+    { text: '' },
+    { html: '  <span class="w">Past Runs</span>' },
+    { html: '    <span class="w">e)</span> <span class="g">✓</span> daily-review    2026-03-14 08:00  <span class="g">exited</span>  <span class="d">1.2M tokens</span>' },
+    { html: '    <span class="w">r)</span> <span class="r">✗</span> weekly-cleanup  2026-03-10 09:00  <span class="r">error</span>   <span class="d">-</span>' },
+    { text: '' },
+    { html: '  <span class="d">[n] new schedule  [esc] back</span> <span class="cursor"></span>' },
+  ]
+};
 
-function renderTerminal() {
+let currentScreen = 'sessions';
+
+function renderTerminal(screenKey, animate) {
   const output = document.getElementById('terminal-output');
+  const lines = screens[screenKey];
   output.innerHTML = '';
-  terminalLines.forEach((line, i) => {
+  lines.forEach((line, i) => {
     const el = document.createElement('span');
     el.className = 'line';
-    el.style.animationDelay = `${0.6 + i * 0.08}s`;
+    if (animate) {
+      el.style.animationDelay = `${0.6 + i * 0.06}s`;
+    } else {
+      el.style.animationDelay = `${i * 0.04}s`;
+    }
     if (line.html) {
       el.innerHTML = line.html;
     } else {
@@ -1133,7 +1191,17 @@ function renderTerminal() {
   });
 }
 
-renderTerminal();
+renderTerminal('sessions', true);
+
+// Alternate screens every 5 seconds
+setInterval(() => {
+  currentScreen = currentScreen === 'sessions' ? 'schedules' : 'sessions';
+  const title = document.querySelector('#demo-terminal .terminal-title');
+  title.textContent = currentScreen === 'sessions'
+    ? 'lila — sessions'
+    : 'lila — scheduled agents';
+  renderTerminal(currentScreen, false);
+}, 5000);
 
 // Quota bar animation
 function animateQuota() {
