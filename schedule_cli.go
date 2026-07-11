@@ -43,6 +43,13 @@ func runScheduledCmd(args []string) {
 		os.Exit(1)
 	}
 
+	// Command tasks run an arbitrary shell command under a failure policy,
+	// not an agent CLI. Branch before any prompt-file handling.
+	if launcher == "command" {
+		runCommandTask(name, cwd, once)
+		return
+	}
+
 	uuid := newUUID()
 
 	prompt, err := os.ReadFile(promptPath(name))

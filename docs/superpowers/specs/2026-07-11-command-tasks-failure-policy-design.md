@@ -98,7 +98,7 @@ Rationale for the split: **retry is mechanical**, so it lives in the sandboxed w
 
 ## Failure Policy (in Go)
 
-`lila record-result` is the policy brain. It updates the pointer with the final exit code, attempts, and finished-at, then:
+`lila record-result` is the policy brain. It runs *inside the tmux session* (as the wrapper's last act), whose environment may not match the launcher's — so it must **resolve the state layout from the run pointer's own path, not from `$XDG_STATE_HOME`**. Given `<stateDir>/runs/<name>-<ts>.json`, the task config is `<stateDir>/tasks/<name>.json` and handler artifacts go in `<stateDir>/runs/`, all derived by walking up from the pointer path. This keeps the result path bomb-proof regardless of the ambient environment. It updates the pointer with the final exit code, attempts, and finished-at, then:
 
 - **Success** (exit 0): `status: success`. Done.
 - **Final failure** (non-zero after all retries): `status: failed`, then:

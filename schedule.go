@@ -30,6 +30,16 @@ type RunPointer struct {
 	UUID   string `json:"uuid"`
 	CWD    string `json:"cwd"`
 	Status string `json:"status"`
+
+	// Command-task fields (empty/omitted for agent runs).
+	Kind        string `json:"kind,omitempty"`         // "command" | "handler" ("" => agent)
+	Command     string `json:"command,omitempty"`      // the shell command (command runs)
+	ExitCode    *int   `json:"exit_code,omitempty"`    // final exit code once finished
+	Attempts    int    `json:"attempts,omitempty"`     // total invocations incl. retries
+	FinishedAt  string `json:"finished_at,omitempty"`  // completion timestamp
+	LogPath     string `json:"log_path,omitempty"`     // captured stdout+stderr
+	HandlerUUID string `json:"handler_uuid,omitempty"` // set on a failed command run
+	ParentUUID  string `json:"parent_uuid,omitempty"`  // set on a handler run
 }
 
 type RunInfo struct {

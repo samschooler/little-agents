@@ -146,7 +146,14 @@ func checkSchedRuns(aliveSessions map[string]bool) {
 		if aliveSessions[sessionName] {
 			continue
 		}
-		// Session is gone — update status
+		// Command/handler runs vanished mid-flight (wrapper killed, OOM,
+		// reboot) — mark crashed and apply the same failure policy so a
+		// hard-killed job can still reach its handler.
+		if ptr.Kind == "command" || ptr.Kind == "handler" {
+			reapCommandRun(filepath.Join(dir, e.Name()), ptr.Attempts)
+			continue
+		}
+		// Agent run — session is gone, resolve status from its session log.
 		logPath := findSessionLog(ptr.CWD, ptr.UUID)
 		status := "error"
 		if logPath != "" {

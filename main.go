@@ -30,6 +30,9 @@ func main() {
 		case "run-scheduled":
 			runScheduledCmd(os.Args[2:])
 			return
+		case "record-result":
+			recordResultCmd(os.Args[2:])
+			return
 		}
 	}
 
